@@ -116,10 +116,11 @@ It was also noted that the suspicious process event did not contain a SHA256 val
 
 ```kql
 LinuxProcess_CL
-| where TimeGenerated between (datetime(2026-07-30 19:19:00) .. datetime(2026-07-30 19:38:00))
-| where DvcHostname == "ff-lf-01"
-| where isempty(TargetProcessSHA256)
-| summarize Count = count()
+| where TimeGenerated between (datetime(2026-07-30 00:00:00) .. datetime(2026-07-31 00:00:00))
+| summarize
+    TotalEvents = count(),
+    WithSHA256 = countif(isnotempty(TargetProcessSHA256)),
+    WithoutSHA256 = countif(isempty(TargetProcessSHA256))
 ```
 
 <img src="query-results/4.png" alt="Query Results 4" width="1200">
