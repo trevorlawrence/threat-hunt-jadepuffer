@@ -28,6 +28,7 @@ I examined the process lineage and command line around the alert to determine wh
 
 ### Investigation Query
 
+```kql
 LinuxProcess_CL
 | where TimeGenerated between (datetime(2026-07-30 19:19:00) .. datetime(2026-07-30 19:21:00))
 | where DvcHostname == "ff-lf-01"
@@ -36,6 +37,7 @@ LinuxProcess_CL
           ActingProcessCommandLine, TargetProcessName, TargetProcessId,
           TargetProcessCommandLine, ActingProcessGuid
 | sort by TimeGenerated asc
+```
 
 The first result showed the normal Langflow startup process:
 
