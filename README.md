@@ -145,7 +145,7 @@ The next question was whether this connection was a one-time event or whether th
 
 The investigation guidance indicated that the connection was being restarted on a schedule. I treated this as a persistence hypothesis and looked for scheduled activity associated with the `langflow` account.
 
-Because Linux scheduled tasks are commonly managed through `cron`, I pivoted to the Linux system telemetry and searched for cron events associated with the attack run.
+Because Linux scheduled tasks are commonly managed through `cron`, I pivoted to the Linux system telemetry and searched for `cron` events associated with the attack run.
 
 ### Investigation Query
 
@@ -170,9 +170,9 @@ LinuxSystem_CL
 
 <img src="query-results/6.png" alt="Cron activity associated with the external IP" width="900">
 
-This was significant because it tied the scheduled task directly to the C2 channel identified earlier. The job was running as the langflow account and used curl to retrieve content from 45.131.66.106 over port 4444, piping the result directly into python3.
+This was significant because it tied the scheduled task directly to the C2 channel identified earlier. The job was running as the `langflow` account and used curl to retrieve content from 45.131.66.106 over port 4444, piping the result directly into python3.
 
-At this point, the cron mechanism and its relationship to the C2 channel were established, but the event itself did not show the execution interval. I therefore needed to determine how frequently this task was being invoked, so I pivoted to shell history to determine how the cron configuration had been created or modified.
+At this point, the cron mechanism and its relationship to the C2 channel were established, but the event itself did not show the execution interval. I therefore needed to determine how frequently this task was being invoked, so I pivoted to shell history to determine how the `cron` configuration had been created or modified.
 
 ```kql
 LinuxShellHistory_CL
@@ -184,10 +184,10 @@ LinuxShellHistory_CL
 
 <img src="query-results/7.png" alt="Shell history showing cron configuration activity" width="900">
 
-The shell history provided the missing context around the cron configuration. The command showed the attacker configuring the C2 command to execute on a **30-minute schedule** under the `langflow` account.
+The shell history provided the missing context around the `cron` configuration. The command showed the attacker configuring the C2 command to execute on a **30-minute schedule** under the `langflow` account.
 
-This explained why the C2 connection was being re-established periodically. The cron configuration was not an unrelated scheduled task; it was specifically tied to the connection to `45.131.66.106:4444`.
+This explained why the C2 connection was being re-established periodically. The `cron` configuration was not an unrelated scheduled task; it was specifically tied to the connection to `45.131.66.106:4444`.
 
 ### C2 Assessment
 
-The attacker used a cron job owned by the langflow account to periodically reconnect to 45.131.66.106:4444. The job retrieved the remote payload and passed it directly to python3, with the cron configuration set to execute every 30 minutes.
+The attacker used a `cron` job owned by the `langflow` account to periodically reconnect to 45.131.66.106:4444. The job retrieved the remote payload and passed it directly to python3, with the `cron` configuration set to execute every 30 minutes.
