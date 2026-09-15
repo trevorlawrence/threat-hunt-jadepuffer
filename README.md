@@ -39,7 +39,7 @@ LinuxProcess_CL
 | sort by TimeGenerated asc
 ```
 
-[Query Results 1](https://github.com/trevorlawrence/threat-hunt-jadepuffer/blob/main/query-results/1.png)
+<img src="query-results/1.png" alt="Query Results 1" width="1200">
 
 The first result showed the normal Langflow startup process:
 
@@ -66,27 +66,14 @@ This was significant because the Langflow process was spawning another Python in
 
 At this point, the investigation shifted from **"Is Python legitimate?"** to **"Why is Langflow spawning another Python interpreter?"**
 
-Further investigation of the agent telemetry identified the initial exploitation path:
+I had established **suspicious execution**, but not yet the mechanism that caused it. Since the environment included telemetry from the LLM agent itself, I next examined agent activity occurring around the time of the process creation.
 
-    /api/v1/validate/code
+```kql
+LLMAgentLogs_CL
+| where TimeGenerated between (datetime(2026-07-30 19:19:00) .. datetime(2026-07-30 19:21:00))
+| project TimeGenerated, session_id, actor, RunId, user_input, model_response,
+          tool_name, tool_args, tool_result
+| sort by TimeGenerated asc
+```
 
-The vulnerability was identified as:
-
-**CVE-2025-3248 — Langflow Remote Code Execution**
-
-The source/staging address associated with the activity was:
-
-    64.20.53.230
-
-The agent's own reasoning provided additional context:
-
-> "Target Langflow instance exposed on 7860. The /api/v1/validate/code endpoint accepts unauthenticated code validation. I will abuse Python default-argument evaluation (CVE-2025-3248) to execute code."
-
-### Assessment
-
-The evidence supports an initial compromise through the exposed Langflow application, followed by Python code execution under the `langflow` service account.
-
-The important distinction was that **Python itself was not the indicator of compromise**. The process lineage and encoded command provided the necessary context to determine that the legitimate Langflow process had been abused to execute attacker-controlled code.
-
-**MITRE ATT&CK:** `T1190 – Exploit Public-Facing Application`  
-**MITRE ATT&CK:** `T1059.006 – Python`
+<img src="query-results/2.png" alt="Query Results 2" width="1200">
