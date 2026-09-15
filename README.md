@@ -110,7 +110,7 @@ Syslog
 
 <img src="query-results/3.png" alt="Query Results 3" width="1200">
 
-The syslog evidence identified 64.20.53.230 as the external source of the request to /api/v1/validate/code. This established the origin of the initial access, but did not yet explain how the compromised host was being controlled after execution. The query also showed, when ff-lf-01 established an outbound connection to 45.131.66.106:4444. This connection became the focus of the Command and Control investigation.
+The syslog evidence identified 64.20.53.230 as the external source of the request to /api/v1/validate/code. This established the origin of the initial access, but did not yet explain how the compromised host was being controlled after execution.
 
 It was also noted that the suspicious process event did not contain a SHA256 value. This initially raised the possibility that the payload had been executed filelessly. Rather than treating the missing hash as proof, I tested the broader process telemetry to determine whether SHA256 was actually being populated consistently.
 
