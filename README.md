@@ -39,6 +39,8 @@ LinuxProcess_CL
 | sort by TimeGenerated asc
 ```
 
+[Query Results 1](https://github.com/trevorlawrence/threat-hunt-jadepuffer/blob/main/query-results/1.png)
+
 The first result showed the normal Langflow startup process:
 
     ActorUsername: root
