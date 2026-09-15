@@ -123,7 +123,7 @@ LinuxProcess_CL
     WithoutSHA256 = countif(isempty(TargetProcessSHA256))
 ```
 
-<img src="query-results/4.png" alt="Query Results 4" width="1200">
+<img src="query-results/4.png" alt="Query Results 4" width="900">
 
 The query results showed that SHA256 was missing from all of the process telemetry, including legitimate activity. The fileless conclusion therefore **does not hold**.
 
