@@ -77,3 +77,59 @@ LLMAgentLogs_CL
 ```
 
 <img src="query-results/2.png" alt="Query Results 2" width="1200">
+
+The results provided several important pieces of context at once.
+
+The activity was associated with the `jadepuffer-agent` actor, session `jp-7f3c9a21`, and `RunId` `jp-46-20260730`.
+
+The telemetry also exposed the `user_input` associated with the session:
+
+> "Gain access to the Flowforge estate, locate and encrypt the most business-critical datastore, and leave payment instructions"
+
+This established the high-level objective given to the agent.
+
+The same results also contained the agent's initial model response:
+
+> "Target Langflow instance exposed on 7860. The /api/v1/validate/code endpoint accepts unauthenticated code validation. I will abuse Python default-argument evaluation (CVE-2025-3248) to execute code."
+
+This provided the missing context for the suspicious Python execution. The agent had identified an exposed Langflow endpoint and selected CVE-2025-3248 as the method for obtaining code execution.
+
+This connected the process-level evidence to the agent's intended action.
+
+The suspicious Python process was therefore not simply an unexplained Python execution. The available telemetry showed that the Langflow instance was being targeted through `/api/v1/validate/code`, with the "JadePuffer" agent specifically identifying **CVE-2025-3248** as the method for obtaining code execution.
+
+The agent telemetry established the exploitation technique, but I also wanted to determine where the attacker-controlled activity originated, so I searched Syslog for for the external source/staging address associated with the GET request.
+
+```kql
+Syslog
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 19:40:00))
+| where Computer == "ff-lf-01"
+| project TimeGenerated, SyslogMessage
+| sort by TimeGenerated asc
+```
+
+<img src="query-results/3.png" alt="Query Results 3" width="1200">
+
+The syslog evidence identified 64.20.53.230 as the external source of the request to /api/v1/validate/code. This established the origin of the initial access, but did not yet explain how the compromised host was being controlled after execution. The query also showed, when ff-lf-01 established an outbound connection to 45.131.66.106:4444. This connection became the focus of the Command and Control investigation.
+
+It was also noted that the suspicious process event did not contain a SHA256 value. This initially raised the possibility that the payload had been executed filelessly. Rather than treating the missing hash as proof, I tested the broader process telemetry to determine whether SHA256 was actually being populated consistently.
+
+```kql
+LinuxProcess_CL
+| where TimeGenerated between (datetime(2026-07-30 19:19:00) .. datetime(2026-07-30 19:38:00))
+| where DvcHostname == "ff-lf-01"
+| where isempty(TargetProcessSHA256)
+| summarize Count = count()
+```
+
+<img src="query-results/4.png" alt="Query Results 4" width="1200">
+
+The query results showed that SHA256 was missing from all of the process telemetry, including legitimate activity. The fileless conclusion therefore **does not hold**.
+
+The missing SHA256 was a telemetry coverage issue rather than evidence that this particular payload was fileless. Since the collection agent was not populating the field across the process data, the absence of a hash could not be used to distinguish the suspicious Python execution from legitimate processes.
+
+This was an important course correction in the investigation. An initially plausible interpretation of the telemetry was rejected after testing it against the broader dataset.
+
+### Initial Access Assessment
+
+The available evidence supports exploitation of the exposed Langflow application through `/api/v1/validate/code`, using **CVE-2025-3248**, followed by Python code execution under the `langflow` service account.
