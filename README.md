@@ -78,27 +78,27 @@ LLMAgentLogs_CL
 
 <img src="query-results/2.png" alt="Query Results 2" width="1200">
 
-The results provided several important pieces of context at once.
+The results provided several important pivots at once.
 
-The activity was associated with the `jadepuffer-agent` actor, session `jp-7f3c9a21`, and `RunId` `jp-46-20260730`.
-
-The telemetry also exposed the `user_input` associated with the session:
+The activity was associated with the `jadepuffer-agent` actor and session `jp-7f3c9a21`. The telemetry also exposed the agent's task:
 
 > "Gain access to the Flowforge estate, locate and encrypt the most business-critical datastore, and leave payment instructions"
 
-This established the high-level objective given to the agent.
+Most importantly, the same telemetry showed the agent invoking:
 
-The same results also contained the agent's initial model response:
+`POST /api/v1/validate/code`
+
+The `model_response` field provided additional context for the request:
 
 > "Target Langflow instance exposed on 7860. The /api/v1/validate/code endpoint accepts unauthenticated code validation. I will abuse Python default-argument evaluation (CVE-2025-3248) to execute code."
 
-This provided the missing context for the suspicious Python execution. The agent had identified an exposed Langflow endpoint and selected CVE-2025-3248 as the method for obtaining code execution.
+This connected the suspicious Python process to a specific attack path. The Langflow service was not simply spawning an unexplained Python interpreter; the LLM agent had been tasked with compromising the Flowforge estate and was actively targeting the exposed Langflow endpoint using `CVE-2025-3248` to obtain code execution.
 
-This connected the process-level evidence to the agent's intended action.
+The telemetry also provided the `RunId` associated with the activity:
 
-The suspicious Python process was therefore not simply an unexplained Python execution. The available telemetry showed that the Langflow instance was being targeted through `/api/v1/validate/code`, with the "JadePuffer" agent specifically identifying **CVE-2025-3248** as the method for obtaining code execution.
+`jp-46-20260730`
 
-The agent telemetry established the exploitation technique, but I also wanted to determine where the attacker-controlled activity originated, so I searched Syslog for for the external source/staging address associated with the GET request.
+This gave me a reliable pivot for correlating the agent's activity with the host and Syslog telemetry. From here, I moved to Syslog to independently verify the endpoint and identify the external source associated with the request.
 
 ```kql
 Syslog
