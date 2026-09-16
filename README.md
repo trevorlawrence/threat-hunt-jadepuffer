@@ -496,7 +496,7 @@ The database activity also showed the creation of a ransom note in the newly-cre
 
 > 3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy
 
-The attacker had encrypted database records, destroyed database tables, and left payment instructions for the victim. The payment address is also significant for the later analysis of the attacker's autonomous behavior and will be examined in the next section.
+The attacker had encrypted database records, destroyed database tables, and left payment instructions for the victim.
 
 # 7. Autonomy
 
