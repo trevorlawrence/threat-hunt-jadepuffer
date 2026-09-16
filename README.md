@@ -656,3 +656,21 @@ The investigation also demonstrated that the activity was not limited to a singl
 A defining characteristic of the incident was the degree of automation demonstrated throughout the attack. The agent received a high-level objective and independently selected exploitation techniques, executed commands, adapted when its expected JSON response was returned as XML, and continued through discovery, credential access, privilege escalation, and impact without evidence of human intervention during the execution chain. The investigation therefore supports the conclusion that this was a human-tasked but autonomously executed attack.
 
 The investigation also demonstrated the value of correlating multiple telemetry sources rather than relying on individual alerts or indicators. Process lineage, network connections, agent telemetry, Syslog, audit events, and database activity each provided pieces of the attack chain. Together, they transformed isolated indicators of compromise into a coherent picture of an automated intrusion and provided sufficient evidence to map the observed behavior to multiple MITRE ATT&CK techniques.
+
+## 11. Security Considerations
+
+The investigation identified several security weaknesses that contributed to the success and progression of the attack.
+
+- **Publicly exposed Langflow:** The Langflow application was accessible on port `7860` and contained a vulnerability that allowed unauthenticated code execution. Public-facing applications should be minimized, appropriately restricted, and kept current with security updates.
+
+- **Default credentials:** The attacker accessed MinIO using `minioadmin:minioadmin`. Default credentials should be removed or changed before systems are placed into service.
+
+- **Sensitive credentials stored in application data:** The attacker was able to retrieve API keys and other provider credentials from the Langflow database. Sensitive credentials should be securely stored, access-controlled, and rotated when exposure is suspected.
+
+- **Exposed container management interface:** The attacker was able to query the Docker socket from the compromised environment. Container management interfaces should not be unnecessarily exposed to compromised applications or containers.
+
+- **Insufficient separation of privileges:** The attack was able to progress from an application compromise to credential access, internal discovery, privilege escalation, and database impact. Strong isolation and least-privilege controls can limit the ability of a compromised application to affect other systems.
+
+- **Detection and telemetry:** The investigation relied on correlating process, network, application, audit, and agent telemetry. Maintaining visibility across these sources is important for detecting automated attacks that can move rapidly between stages.
+
+These considerations demonstrate that preventing a single vulnerability is not sufficient by itself. Defense in depth is necessary to prevent an initial application compromise from becoming a broader compromise of the environment.
