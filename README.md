@@ -16,6 +16,15 @@ Several of these behaviors were intentionally preserved in the available telemet
 
 > **Investigation objective:** Reconstruct the attack chain from initial access through impact, distinguish malicious activity from legitimate Linux operations, and determine the degree of human involvement in the operation.
 
+## Langflow's Environment Topology
+
+| Host | IP Address | Primary Service |
+|---|---|---|
+| `ff-lf-01` | `10.4.0.10` | **Langflow** (AI workflow framework), entry point |
+| `ff-minio-01` | `10.4.0.20` | **MinIO** (S3-compatible object storage) |
+| `ff-db-01` | `10.4.0.30` | **MySQL database server** |
+| `ff-nacos-01` | `10.4.0.40` | **Nacos** (platform for managing application services and configurations) |
+
 # 1. Initial Access
 
 The investigation began with the suspicious process that triggered the analytics rule. Because `python3.11` was already part of the legitimate Langflow environment, the presence of Python alone was not enough to establish malicious execution.
