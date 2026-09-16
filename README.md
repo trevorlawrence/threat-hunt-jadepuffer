@@ -527,7 +527,7 @@ A human supplied the objective at the beginning of the session and gave the init
 
 The distinction is important: the evidence does not show a human manually directing each action. Instead, it shows a human establishing the objective and an LLM agent carrying out the intrusion through its own decisions.
 
-# 8. Real or Noise
+# 8. Real or Noise?
 
 After establishing the attack chain, I needed to determine whether the activity could reasonably be explained as normal behavior in the environment. The host generated legitimate Python activity, legitimate external network connections, and routine scheduled processes, so individual indicators could not always be treated as malicious in isolation.
 
@@ -616,3 +616,33 @@ This concentration provided another distinction between the intrusion and the no
 Taken together, the process lineage, network destination port, and temporal concentration provided multiple characteristics that separated the intrusion from otherwise legitimate Python and network activity.
 
 Ultimately, we see a continuous attack compressed into approximately 17 minutes with no pauses.
+
+## 9. MITRE ATT&CK Mapping
+
+The activity mapped across multiple MITRE ATT&CK tactics, progressing from exploitation and execution through persistence, credential access, discovery, privilege escalation, and ultimately impact. The telemetry demonstrated that these techniques were not isolated events; they formed a connected attack sequence across the Flowforge estate.
+
+The following techniques were identified from the evidence collected during the investigation:
+
+| Tactic | Technique | Evidence / Activity | Section |
+|---|---|---|---:|
+| Initial Access | **T1190 · Exploit Public-Facing Application** | Langflow exposed on port `7860`; attacker identified and exploited CVE-2025-3248 through `/api/v1/validate/code` | 1 |
+| Execution | **T1059.006 · Python** | Python interpreters used to execute the attacker-controlled payloads | 1, 4 |
+| Command and Control | **T1571 · Non-Standard Port** | PID `4471` established a connection to `45.131.66.106:4444` | 2, 8 |
+| Persistence | **T1053.003 · Cron** | `langflow` cron job retrieved and executed the payload on a recurring interval | 2 |
+| Credential Access | **T1552/T1555 · Unsecured Credentials / Credentials from Password Stores** | Attacker extracted stored provider credentials/API keys from the Langflow database | 3 |
+| Credential Access | **T1552 · Unsecured Credentials** | Credentials/API keys were stored in an application repository accessible to the attacker | 3 |
+| Discovery | **T1046 · Network Service Discovery** | PID `4491` scanned `10.4.0.0/24` and identified MinIO, MySQL, and Nacos services | 4 |
+| Credential Access | **T1078.001 · Default Accounts** | MinIO accessed using `minioadmin:minioadmin` | 4 |
+| Credential Access | **T1552.001 · Credentials In Files** | `terraform-state` and `credentials.json` retrieved from MinIO object storage | 4 |
+| Collection | **T1005 · Data from Local System** | Agent retrieved data from the local environment and adapted after receiving XML instead of the expected JSON | 4 |
+| Privilege Escalation | **T1068 · Exploitation for Privilege Escalation** | Nacos authentication-bypass attempt followed by successful account creation | 5 |
+| Persistence | **T1136.001 · Create Account: Local Account** | `svc_maint` account created on `ff-nacos-01` | 5 |
+| Privilege Escalation | **T1611 · Escape to Host** | Agent queried the Docker socket with `GET /containers/json`, probing the container runtime for a potential escape path; successful escape was not established | 5 |
+| Impact | **T1485 ·Data Destruction** | `config_info`/`history` tables dropped | 6 |
+| Impact | **T1486 · Data Encrypted for Impact** | Database records encrypted using `AES_ENCRYPT` | 6 |
+
+### Analysis
+
+The activity mapped across multiple MITRE ATT&CK tactics, progressing from exploitation and execution through persistence, credential access, discovery, privilege escalation, and ultimately impact. The telemetry demonstrated that these techniques were not isolated events; they formed a connected attack sequence across the Flowforge estate.
+
+The strongest mappings were supported by host and network telemetry rather than inference from the public disclosure alone. Process lineage, network connections, audit events, and application logs provided independent evidence for the techniques observed during the investigation.
