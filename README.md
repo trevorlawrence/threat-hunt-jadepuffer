@@ -1,4 +1,4 @@
-# Threat Hunt: JadePuffer
+<img src="query-results/JadePuffer-Hero-Image.png" alt="Hero Image" width="1200">
 
 ## Alert Brief
 
