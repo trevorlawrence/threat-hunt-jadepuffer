@@ -26,8 +26,6 @@ My first question was:
 
 I examined the process lineage and command line around the alert to determine what created the suspicious Python process.
 
-### Investigation Query
-
 ```kql
 LinuxProcess_CL
 | where TimeGenerated between (datetime(2026-07-30 19:19:00) .. datetime(2026-07-30 19:21:00))
@@ -147,8 +145,6 @@ The investigation guidance indicated that the connection was being restarted on 
 
 Because Linux scheduled tasks are commonly managed through `cron`, I pivoted to the Linux system telemetry and searched for `cron` events associated with the attack run.
 
-### Investigation Query
-
 ```kql
 LinuxAudit_CL
 | where TimeGenerated between (datetime(2026-07-30 19:00:00) .. datetime(2026-07-30 20:00:00))
@@ -191,3 +187,87 @@ This explained why the C2 connection was being re-established periodically. The 
 ### C2 Assessment
 
 The attacker used a `cron` job owned by the `langflow` account to periodically reconnect to 45.131.66.106:4444. The job retrieved the remote payload and passed it directly to python3, with the `cron` configuration set to execute every 30 minutes.
+
+# 3. Credential Access
+
+With the C2 channel and persistence established, the next stage of the investigation focused on determining what information the attacker was attempting to obtain.
+
+The first lead was database activity on `ff-db-01`, but I had to establish whether it was a routine backup or an action taken by JadePuffer.
+
+## Identifying the Credential Dump
+
+I searched the process telemetry for activity on `ff-db-01` during the investigation window.
+
+```kql
+LinuxProcess_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 19:40:00))
+| where DvcHostname == "ff-db-01"
+| project TimeGenerated, ActorUsername, ActingProcessName,
+          ActingProcessCommandLine, TargetProcessName,
+          TargetProcessCommandLine, TargetProcessId
+| order by TimeGenerated asc
+```
+
+<img src="query-results/8.png" alt="PostgreSQL dump activity on ff-db-01" width="900">
+
+The results showed `pg_dump` executing during the timeframe. This initially created ambiguity because `pg_dump` was also used for the system's legitimate nightly backup process, so the process name alone could not distinguish normal backup activity from credential theft.
+
+I searched again using the previously identified `RunId` of `jp-46-20260730` to correlate the agent's activity with process telemetry on `ff-db-01`. Rather than searching for `pg_dump` across the host and potentially returning the legitimate nightly backups, I restricted the search to processes associated with the known malicious agent session.
+
+```kql
+LinuxProcess_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| where RunId =~ "jp-46-20260730"
+| project TimeGenerated, ActorUsername, ActingProcessName,
+          ActingProcessCommandLine, TargetProcessName,
+          TargetProcessCommandLine, TargetProcessId, RunId
+| order by TimeGenerated asc
+```
+
+<img src="query-results/9.png" alt="Agent-associated process activity showing the suspicious PostgreSQL dump" width="900">
+
+The results showed a `python3.11` process running under the `langflow` account that spawned `pg_dump` with the following command:
+
+```text
+pg_dump -h 127.0.0.1 -U langflow -d langflow -t variable -t api_key
+```
+
+This was the process I was looking for. The dump was initiated by the `langflow` account and targeted the `variable` and `api_key` tables, distinguishing it from the legitimate nightly backup activity previously observed under the `backup` account.
+
+The `RunId` correlation was particularly useful here because it allowed the process activity to be tied directly to the agent-driven intrusion rather than treating every `pg_dump` execution on the database server as suspicious.
+
+## Determining What Was Taken
+
+After establishing that the `langflow` account had performed a database dump, the next question was what the attacker obtained from it.
+
+The investigation showed that the attacker targeted the Langflow database's API-key information. I then examined the LLM agent's responses to see if it would tell me what it had taken.
+
+```kql
+LLMAgentLogs_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| project TimeGenerated, actor, model_response, retrieved_content, session_id
+| order by TimeGenerated asc
+```
+
+<img src="query-results/10.png" alt="Model response indicating what was stolen" width="900">
+
+The attacker came away with **eight distinct provider families**:
+
+- OpenAI
+- Anthropic
+- DeepSeek
+- Gemini
+- Alibaba
+- Aliyun
+- Tencent
+- Huawei
+
+This showed that the activity was not limited to a single credential or service. The dump contained credentials spanning both LLM providers and cloud providers.
+
+### Credential Access Assessment
+
+The evidence showed that the `langflow` service account performed a database dump separate from the legitimate nightly backup process. The attacker targeted API-key data and obtained credentials associated with eight distinct provider families.
+
+The account identity was therefore more useful than the `pg_dump` binary itself for distinguishing malicious credential access from routine database maintenance.
+
+
