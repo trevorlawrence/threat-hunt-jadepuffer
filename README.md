@@ -638,7 +638,8 @@ The following techniques were identified from the evidence collected during the 
 | Execution | **T1059.006 · Python** | Python interpreters used to execute the attacker-controlled payloads | 1, 4 |
 | Command and Control | **T1571 · Non-Standard Port** | PID `4471` established a connection to `45.131.66.106:4444` | 2, 8 |
 | Persistence | **T1053.003 · Cron** | `langflow` cron job retrieved and executed the payload on a recurring interval | 2 |
-| Credential Access | **T1552/T1555 · Unsecured Credentials / Credentials from Password Stores** | Attacker extracted stored provider credentials/API keys from the Langflow database | 3 |
+| Credential Access | **T1555 · Credentials from Password Stores** | Attacker accessed credentials stored by the Langflow application and extracted API keys for eight provider families | 3 |
+| Credential Access | **T1552 · Unsecured Credentials** | Credentials were stored in an application repository accessible from the compromised Langflow environment | 3 |
 | Discovery | **T1046 · Network Service Discovery** | PID `4491` scanned `10.4.0.0/24` and identified MinIO, MySQL, and Nacos services | 4 |
 | Credential Access | **T1078.001 · Default Accounts** | MinIO accessed using `minioadmin:minioadmin` | 4 |
 | Credential Access | **T1552.001 · Credentials In Files** | `terraform-state` and `credentials.json` retrieved from MinIO object storage | 4 |
@@ -646,8 +647,8 @@ The following techniques were identified from the evidence collected during the 
 | Privilege Escalation | **T1068 · Exploitation for Privilege Escalation** | Nacos authentication-bypass attempt followed by successful account creation | 5 |
 | Persistence | **T1136.001 · Create Account: Local Account** | `svc_maint` account created on `ff-nacos-01` | 5 |
 | Privilege Escalation | **T1611 · Escape to Host** | Agent queried the Docker socket with `GET /containers/json`, probing the container runtime for a potential escape path; successful escape was not established | 5 |
-| Impact | **T1485 ·Data Destruction** | `config_info`/`history` tables dropped | 6 |
-| Impact | **T1486 · Data Encrypted for Impact** | Database records encrypted using `AES_ENCRYPT` | 6 |
+| Impact | **T1486 · Data Encrypted for Impact** | `AES_ENCRYPT` was used to encrypt 1,342 rows in the database | 6 |
+| Impact | **T1485 · Data Destruction** | `config_info` and `history` tables were dropped after the encryption activity | 6 |
 
 ### Analysis
 
