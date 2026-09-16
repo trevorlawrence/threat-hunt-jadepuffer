@@ -270,16 +270,13 @@ The account identity was therefore more useful than the `pg_dump` binary itself 
 
 # 4. Discovery & Lateral Movement
 
-The next stage of the investigation showed that the compromised host was no longer limited to the initial access and C2 activity. A second Python interpreter appeared on `ff-lf-01` several minutes after the initial exploit.
+The credential-access activity showed that the agent was able to execute commands on systems beyond the initial Langflow process. I next returned to the process telemetry for `ff-lf-01` to determine what other execution occurred during the same agent run.
 
-I wanted to determine whether this represented another phase of the intrusion and, if so, what activity was associated with the new process.
-
-## Identifying the Second Interpreter
-
-A second `python3.11` process was started on `ff-lf-01` at approximately 19:27 UTC. Because the initial exploit had already been associated with a separate Python process, I used the previously identified agent `RunId` to correlate the process activity with the same intrusion.
+Rather than looking only for a specific command, I examined the Python processes associated with the previously identified `RunId`. This would allow me to determine whether the agent spawned additional interpreters and, if so, what activity was associated with them.
 
 ```kql
 LinuxProcess_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
 | where RunId =~ "jp-46-20260730"
 | where DvcHostname =~ "ff-lf-01" and TargetProcessName =~ "python3.11"
 | project TimeGenerated, TargetProcessId, ActingProcessCommandLine
@@ -287,6 +284,101 @@ LinuxProcess_CL
 
 <img src="query-results/11.png" alt="Second Python interpreter identified on ff-lf-01" width="1200">
 
-The results showed a second Python interpreter with process ID `4491`.
+The results showed another `python3.11` process associated with the agent run. This process had PID `4491`.
 
-This was significant because the process appeared several minutes after the initial exploit interpreter. I could now use PID `4491` as a process-level pivot to determine what activity occurred during this phase of the intrusion.
+This gave me a new process-level pivot. I could now follow the network activity generated specifically by PID `4491` to determine what the agent was doing with the second interpreter.
+
+## Scoping the Internal Sweep
+
+With PID `4491` identified, I next examined the network connections associated with that specific process. The goal was to determine whether the second interpreter was communicating with other systems inside the Flowforge environment.
+
+```kql
+LinuxNetwork_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| where RunId =~ "jp-46-20260730"
+| where ActingProcessId == 4491
+| project TimeGenerated, DstIpAddr, DstPortNumber
+| sort by TimeGenerated asc
+```
+
+<img src="query-results/12.png" alt="Internal network connections from Python process 4491" width="1200">
+
+The network telemetry showed three internal destinations reached by the process:
+
+- `10.4.0.20:9000`
+- `10.4.0.30:3306`
+- `10.4.0.40:8848`
+
+The three connections occurred within a **very** short period of time and targeted different services on the internal network.
+
+This changed the focus of the investigation. The second Python interpreter was not simply continuing the original execution on `ff-lf-01`, but actively probing other systems in the environment.
+
+The three destinations represented different internal services:
+
+- `10.4.0.20:9000` — MinIO
+- `10.4.0.30:3306` — MySQL
+- `10.4.0.40:8848` — Nacos
+
+The MinIO service was the next logical pivot because it provided object storage that could potentially contain configuration files, credentials, or other infrastructure data.
+
+## Identifying If the Attacker Accessed MinIO
+
+The network sweep identified MinIO at `10.4.0.20:9000`. I next examined the agent telemetry for evidence of access to the service.
+
+```kql
+LLMAgentLogs_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| where RunId =~ "jp-46-20260730"
+| where model_response has "minioadmin" or model_response has "MinIO"
+| project TimeGenerated, model_response
+```
+
+<img src="query-results/13.png" alt="Agent telemetry showing MinIO access using default credentials" width="800">
+
+The agent telemetry showed that MinIO accepted the factory-default credential pair:
+
+```text
+minioadmin:minioadmin
+```
+
+No exploit was required to access the service. The attacker was able to authenticate using the default account credentials that had apparently never been changed.
+
+## Determining What Was Retrieved
+
+After establishing access to MinIO, I needed to determine what the attacker retrieved from the object store.
+
+I pivoted to the MinIO host's Syslog telemetry and searched for object retrieval activity associated with the same agent run.
+
+```kql
+Syslog
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| where RunId_CF =~ "jp-46-20260730"
+| where Computer =~ "ff-minio-01" and SyslogMessage has "GetObject"
+| project TimeGenerated, SyslogMessage
+```
+
+<img src="query-results/14.png" alt="MinIO object retrieval activity" width="1200">
+
+The object retrieval activity showed that the attacker accessed:
+
+```text
+terraform-state
+credentials.json
+```
+
+These files were significant because they represented infrastructure and credential material rather than ordinary application data.
+
+The `terraform-state` object could contain information about deployed infrastructure and associated configuration, while `credentials.json` represented another potential source of authentication material.
+
+At this point, the investigation had established a progression from internal service discovery to authenticated access to MinIO and retrieval of potentially sensitive infrastructure data.
+
+## The Unexpected Response and Correction
+
+The MinIO investigation also revealed an important piece of behavioral evidence. JadePuffer did not receive the response it expected from the object-storage request. The agent expected the response to contain JSON data, but instead received XML.
+
+Rather than abandoning the request, the agent recognized the mismatch and adjusted its parsing logic. It then retried the object retrieval using the corrected approach.
+
+This was significant because the failure itself became evidence of how the intrusion was being conducted. The activity was not simply a fixed sequence of commands executing exactly as written. The agent encountered an unexpected result, interpreted the failure, modified its approach, and continued the operation.
+
+The failed request and subsequent correction will be revisited later in the report when examining the autonomous behavior of the intrusion.
+
