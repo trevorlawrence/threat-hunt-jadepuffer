@@ -526,3 +526,93 @@ The XML response encountered during the MinIO operation was particularly signifi
 A human supplied the objective at the beginning of the session and gave the initiating command. After receiving that objective, however, the available telemetry shows the agent independently generated the technical steps used to pursue it and adapted those steps when the environment produced an unexpected result or a roadblock.
 
 The distinction is important: the evidence does not show a human manually directing each action. Instead, it shows a human establishing the objective and an LLM agent carrying out the intrusion through its own decisions.
+
+# 8. Real or Noise
+
+After establishing the attack chain, I needed to determine whether the activity could reasonably be explained as normal behavior in the environment. The host generated legitimate Python activity, legitimate external network connections, and routine scheduled processes, so individual indicators could not always be treated as malicious in isolation.
+
+I therefore compared the characteristics of the attacker activity against the benign activity observed on the same host.
+
+## Distinguishing the Python Spawns
+
+Several `python3.11` processes were present on `ff-lf-01` during the investigation window. Because the executable itself was not unique to the attack, I examined the parent-child relationships to determine what distinguished the suspicious interpreters from the normal Langflow process.
+
+```kql
+LinuxProcess_CL
+| where TimeGenerated between (datetime(2026-07-30 19:19:00) .. datetime(2026-07-30 20:00:00))
+| where DvcHostname == "ff-lf-01"
+| where TargetProcessName == "python3.11"
+| project TimeGenerated, ActorUsername, ActingProcessName,
+          ActingProcessCommandLine, TargetProcessName,
+          TargetProcessCommandLine, TargetProcessId, RunId
+| order by TimeGenerated asc
+```
+
+<img src="query-results/20.png" alt="Python process lineage on ff-lf-01" width="1200">
+
+The results showed the normal Langflow process starting at 19:19:00 under `systemd`:
+
+    ActingProcessName: systemd
+    ActingProcessCommandLine: /sbin/init
+    TargetProcessName: python3.11
+    TargetProcessCommandLine: /opt/langflow/.venv/bin/langflow run --host 0.0.0.0 --port 7860
+    TargetProcessId: 3201
+
+At 19:20:04, the Langflow process spawned another `python3.11` process, PID `4471`, which executed the encoded payload:
+
+    ActingProcessName: python3.11
+    ActingProcessCommandLine: /opt/langflow/.venv/bin/langflow run --host 0.0.0.0 --port 7860
+    TargetProcessName: python3.11
+    TargetProcessCommandLine: python3 -c <base64 payload>
+    TargetProcessId: 4471
+
+At 19:27:28, PID `4471` then spawned another `python3.11` process, PID `4491`, which executed the encoded subnet sweep:
+
+    ActingProcessName: python3.11
+    ActingProcessCommandLine: python3 -c <base64 payload>
+    TargetProcessName: python3.11
+    TargetProcessCommandLine: python3 -c <base64 subnet sweep 10.4.0.0/24>
+    TargetProcessId: 4491
+
+The distinguishing field was therefore `ActingProcessName`. The normal Langflow startup was launched by `systemd`, while the two suspicious interpreters were part of a chained `python3.11`-to-`python3.11` process relationship.
+
+This demonstrated that the executable name alone was insufficient to identify the attack. The process lineage provided the additional behavioral context needed to distinguish the suspicious Python execution from the normal Langflow process.
+
+## Distinguishing the External Connections
+
+I next applied the same approach to the external network activity. `ff-lf-01` communicated with several legitimate external services during the investigation window, so the destination IP address alone was not enough to classify an external connection as malicious.
+
+I examined the destination ports associated with external connections to determine whether the C2 traffic had a distinguishing characteristic.
+
+```kql
+LinuxNetwork_CL
+| where TimeGenerated between (datetime(2026-07-30 19:00:00) .. datetime(2026-07-30 20:00:00))
+| where DvcHostname == "ff-lf-01"
+| where DstIpAddr !startswith "10."
+| project TimeGenerated, ActingProcessId, DstIpAddr, DstPortNumber, RunId
+| order by TimeGenerated asc
+```
+
+<img src="query-results/21.png" alt="External network connections from ff-lf-01" width="900">
+
+The results showed several external connections during the investigation window. These included connections to `104.18.30.77` over port `8443`, connections to `104.16.132.229` over port `8080`, and a connection to `45.131.66.106` over port `4444`.
+
+The connection to `45.131.66.106:4444` was significant because it was made by process ID `4471`.
+
+PID `4471` had already been identified earlier in the investigation as the Python interpreter spawned by the Langflow process during the initial exploitation. The process subsequently established the connection to `45.131.66.106` at approximately `19:22:04` UTC. This process correlation provided the evidence needed to distinguish the connection from the other external traffic. The significance of `4444` was not simply that it was a non-standard port; the connection was made by the same suspicious Python process already associated with the exploitation activity.
+
+The external connection to `45.131.66.106` on destination port `4444` was therefore confirmed as the command-and-control connection associated with the attack.
+
+## Distinguishing the Timing
+
+Finally, I examined the timing of the activity. Individual process and network events could resemble legitimate activity when viewed in isolation, so I needed to determine whether the attacker's actions formed a recognizable temporal pattern.
+
+The activity associated with the intrusion was concentrated into a single period rather than being distributed throughout the working day like the benign Python activity.
+
+The full sequence, from the initial exploitation through the subsequent discovery, credential access, privilege escalation, and impact activity, occurred over approximately 17 minutes.
+
+This concentration provided another distinction between the intrusion and the normal activity on the host. Rather than isolated Python processes and network connections appearing at ordinary intervals, the attack produced a dense sequence of related activity across the environment.
+
+Taken together, the process lineage, network destination port, and temporal concentration provided multiple characteristics that separated the intrusion from otherwise legitimate Python and network activity.
+
+Ultimately, we see a continuous attack compressed into approximately 17 minutes with no pauses.
