@@ -639,7 +639,6 @@ The following techniques were identified from the evidence collected during the 
 | Command and Control | **T1571 · Non-Standard Port** | PID `4471` established a connection to `45.131.66.106:4444` | 2, 8 |
 | Persistence | **T1053.003 · Cron** | `langflow` cron job retrieved and executed the payload on a recurring interval | 2 |
 | Credential Access | **T1552/T1555 · Unsecured Credentials / Credentials from Password Stores** | Attacker extracted stored provider credentials/API keys from the Langflow database | 3 |
-| Credential Access | **T1552 · Unsecured Credentials** | Credentials/API keys were stored in an application repository accessible to the attacker | 3 |
 | Discovery | **T1046 · Network Service Discovery** | PID `4491` scanned `10.4.0.0/24` and identified MinIO, MySQL, and Nacos services | 4 |
 | Credential Access | **T1078.001 · Default Accounts** | MinIO accessed using `minioadmin:minioadmin` | 4 |
 | Credential Access | **T1552.001 · Credentials In Files** | `terraform-state` and `credentials.json` retrieved from MinIO object storage | 4 |
