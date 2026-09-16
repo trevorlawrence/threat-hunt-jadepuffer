@@ -382,3 +382,81 @@ This was significant because the failure itself became evidence of how the intru
 
 The failed request and subsequent correction will be revisited later in the report when examining the autonomous behavior of the intrusion.
 
+# 5. Privilege Escalation
+
+The discovery activity showed that the attacker had moved beyond the initial Langflow host and was interacting with internal services. The next phase focused on whether those interactions resulted in elevated privileges or additional persistence.
+
+The Nacos service identified during the internal sweep became particularly significant. I examined its telemetry for authentication activity and account-management events associated with the same agent run.
+
+## The Rejected Attempt
+
+I first looked for failed authentication or account-management activity on the Nacos host. A failed request would be useful for establishing whether the attacker was attempting to obtain additional privileges and whether the attempt succeeded.
+
+```kql
+Syslog
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 19:40:00))
+| where RunId_CF =~ "jp-46-20260730"
+| where Computer =~ "ff-nacos-01"
+| project TimeGenerated, SyslogMessage
+| order by TimeGenerated asc
+```
+
+<img src="query-results/15.png" alt="Nacos authentication requests" width="900">
+
+The results showed a rejected request at `19:34:36` UTC. Nacos returned HTTP `403`, with the authentication rejected because the password hash was blank.
+
+This showed that the attacker was attempting to use the Nacos authentication mechanism to create or obtain an administrative account, but the first attempt failed because the supplied password hash did not satisfy the server's requirements. There was also a new user account called `svc-maint` created 31 seconds after the failed attempt, so I hypothesized that JadePuffer was trying to gain access another way.
+
+## Proving the Corrective Attempt
+
+I moved from the Syslog telemetry to the host's audit telemetry and searched for user-creation events associated with JadePuffer's `RunId`.
+
+```kql
+LinuxAudit_CL
+| where TimeGenerated between (datetime(2026-07-30 19:30:00) .. datetime(2026-07-30 19:40:00))
+| where RunId =~ "jp-46-20260730"
+| where Computer =~ "ff-nacos-01"
+| where AuditType =~ "ADD_USER"
+| project TimeGenerated, EventOriginalMessage
+| order by TimeGenerated asc
+```
+
+<img src="query-results/16.png" alt="Nacos host audit telemetry showing successful account creation" width="900">
+
+The host audit telemetry showed a successful account-creation event at `19:35:07` UTC for the same username seen previously: `svc_maint`.
+
+The event also provided two identifiers that were not present in the Syslog evidence:
+
+- PID: `8801`
+- UID: `997`
+
+The PID and UID are particularly useful because they come straight from the host's audit telemetry, providing host-level evidence tying the successful account creation to a specific process and user identity.
+
+At this point, the investigation had established a sequence of failed authentication followed by successful account creation.
+
+## The Container Runtime Probe
+
+The next question was whether the attacker had attempted to interact with the container environment on `ff-lf-01`. I searched the container telemetry associated with the JadePuffer's run to determine whether any activity could be established. 
+
+```kql
+LinuxContainer_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| where RunId =~ "jp-46-20260730"
+| project TimeGenerated, Operation, RunId, ContainerId, ImageName, ImageRef
+| order by TimeGenerated asc
+```
+
+<img src="query-results/17.png" alt="Container runtime telemetry" width="900">
+
+The telemetry showed a request to the Docker API for the container list:
+
+```text
+GET /containers/json
+```
+
+However, the available telemetry did not contain the response to that request. The `LinuxContainer_CL` data also did not provide `ContainerId`, `ImageName`, or `ImageRef` values that could be used to establish which containers were returned.
+
+I therefore could not determine which containers, if any, were visible to the attacker from the available evidence.
+
+Rather than inferring the container list from the request itself, I recorded the finding as a telemetry limitation: the request was observed, but the response required to establish the result was not collected.
+
