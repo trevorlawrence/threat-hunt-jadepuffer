@@ -683,3 +683,8 @@ The investigation identified several security weaknesses that contributed to the
 - **Detection and telemetry:** The investigation relied on correlating process, network, application, audit, and agent telemetry. Maintaining visibility across these sources is important for detecting automated attacks that can move rapidly between stages.
 
 These considerations demonstrate that preventing a single vulnerability is not sufficient by itself. Defense in depth is necessary to prevent an initial application compromise from becoming a broader compromise of the environment.
+
+
+
+
+***Author: Trevor L. Pulliam***
