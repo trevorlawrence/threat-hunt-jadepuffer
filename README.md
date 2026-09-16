@@ -139,9 +139,7 @@ With initial access established, the investigation then moved to the network act
 
 The connection to `45.131.66.106:4444` was first identified during the initial-access investigation. At that stage, it was an external connection associated with the compromised host and stood out from the host's normal HTTPS traffic.
 
-The next question was whether this connection was a one-time event or whether the attacker had established a mechanism to re-establish it.
-
-The investigation guidance indicated that the connection was being restarted on a schedule. I treated this as a persistence hypothesis and looked for scheduled activity associated with the `langflow` account.
+The next question was whether this connection was a one-time event or whether the attacker had established a mechanism to re-establish it. I treated this as a persistence hypothesis and looked for scheduled activity associated with the `langflow` account.
 
 Because Linux scheduled tasks are commonly managed through `cron`, I pivoted to the Linux system telemetry and searched for `cron` events associated with the attack run.
 
