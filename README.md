@@ -268,4 +268,25 @@ The evidence showed that the `langflow` service account performed a database dum
 
 The account identity was therefore more useful than the `pg_dump` binary itself for distinguishing malicious credential access from routine database maintenance.
 
+# 4. Discovery & Lateral Movement
 
+The next stage of the investigation showed that the compromised host was no longer limited to the initial access and C2 activity. A second Python interpreter appeared on `ff-lf-01` several minutes after the initial exploit.
+
+I wanted to determine whether this represented another phase of the intrusion and, if so, what activity was associated with the new process.
+
+## Identifying the Second Interpreter
+
+A second `python3.11` process was started on `ff-lf-01` at approximately 19:27 UTC. Because the initial exploit had already been associated with a separate Python process, I used the previously identified agent `RunId` to correlate the process activity with the same intrusion.
+
+```kql
+LinuxProcess_CL
+| where RunId =~ "jp-46-20260730"
+| where DvcHostname =~ "ff-lf-01" and TargetProcessName =~ "python3.11"
+| project TimeGenerated, TargetProcessId, ActingProcessCommandLine
+```
+
+<img src="query-results/11.png" alt="Second Python interpreter identified on ff-lf-01" width="1200">
+
+The results showed a second Python interpreter with process ID `4491`.
+
+This was significant because the process appeared several minutes after the initial exploit interpreter. I could now use PID `4491` as a process-level pivot to determine what activity occurred during this phase of the intrusion.
