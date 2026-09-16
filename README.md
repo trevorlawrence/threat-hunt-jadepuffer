@@ -409,7 +409,7 @@ This showed that the attacker was attempting to use the Nacos authentication mec
 
 ## Proving the Corrective Attempt
 
-I moved from the Syslog telemetry to the host's audit telemetry and searched for user-creation events associated with JadePuffer's `RunId`.
+To confirm my suspicion, I moved from the Syslog telemetry to the host's audit telemetry and searched for user-creation events associated with JadePuffer's `RunId`.
 
 ```kql
 LinuxAudit_CL
@@ -460,3 +460,49 @@ I therefore could not determine which containers, if any, were visible to the at
 
 Rather than inferring the container list from the request itself, I recorded the finding as a telemetry limitation: the request was observed, but the response required to establish the result was not collected.
 
+# 6. Impact
+
+With the attacker having established access to the database, the next question was what effect the activity had on the data itself. I examined the database host telemetry for activity associated with the same agent `RunId`.
+
+```kql
+Syslog
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| where RunId_CF =~ "jp-46-20260730"
+| where Computer =~ "ff-db-01"
+| project TimeGenerated, SyslogMessage
+| order by TimeGenerated asc
+```
+
+<img src="query-results/18.png" alt="Database encryption and destruction activity" width="1200">
+
+The results showed `AES_ENCRYPT` being used against the database, followed by the destruction of two tables:
+
+> config_info
+> history
+
+The encryption operation affected 1,342 rows, indicating that the database was actively modified as part of the attack, with data encrypted and tables subsequently dropped.
+
+The database activity also showed the creation of a ransom note in the newly-created README_RANSOM table. The note instructed the victim to make payment to the following Bitcoin address:
+
+> 3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy
+
+The attacker had encrypted database records, destroyed database tables, and left payment instructions for the victim. The payment address is also significant for the later analysis of the attacker's autonomous behavior and will be examined in the next section.
+
+# 7. Autonomy
+
+With the technical progression of the intrusion established, the final question was how the operation was conducted. The investigation had already identified extensive LLM agent telemetry, but I needed to determine whether the activity was being directed interactively by a person or whether a person had provided an objective and allowed the agent to execute independently.
+
+## Q1 — Identifying the Session and Tasking
+
+The agent telemetry contained activity from more than one conversation. I first needed to separate the activity associated with the Flowforge estate's legitimate assistant from the session responsible for the intrusion.
+
+I used the previously identified `RunId` to summarize the agent activity by actor and session.
+
+### Investigation Query
+
+```kql
+LLMAgentLogs_CL
+| where TimeGenerated between (datetime(2026-07-30 19:20:00) .. datetime(2026-07-30 20:00:00))
+| where RunId =~ "jp-46-20260730"
+| summarize count() by actor, session_id
+| sort by count_ desc
