@@ -478,6 +478,7 @@ Syslog
 The results showed `AES_ENCRYPT` being used against the database, followed by the destruction of two tables:
 
 > config_info
+>
 > history
 
 The encryption operation affected 1,342 rows, indicating that the database was actively modified as part of the attack, with data encrypted and tables subsequently dropped.
@@ -492,7 +493,7 @@ The attacker had encrypted database records, destroyed database tables, and left
 
 With the technical progression of the intrusion established, the final question was how the operation was conducted. The investigation had already identified extensive LLM agent telemetry, but I needed to determine whether the activity was being directed interactively by a person or whether a person had provided an objective and allowed the agent to execute independently.
 
-## Q1 — Identifying the Session and Tasking
+## Identifying the Session and Tasking
 
 The agent telemetry contained activity from more than one conversation. I first needed to separate the activity associated with the Flowforge estate's legitimate assistant from the session responsible for the intrusion.
 
