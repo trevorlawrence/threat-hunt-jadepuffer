@@ -1,0 +1,69 @@
+name: Build Threat Hunt PDF
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PDF dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc texlive-xetex texlive-latex-extra fonts-dejavu
+
+      - name: Prepare report Markdown
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          readme = Path('README.md').read_text(encoding='utf-8')
+          # Convert the README's HTML image tags to Markdown images so Pandoc
+          # embeds the repository screenshots in the PDF.
+          readme = re.sub(
+              r'<img\s+src="([^"]+)"\s+alt="([^"]*)"(?:\s+width="[^"]*")?\s*/?>',
+              lambda m: f'![{m.group(2)}]({m.group(1)})',
+              readme,
+              flags=re.I,
+          )
+
+          front = '''---
+          title: "Threat Hunt: JadePuffer"
+          subtitle: "A Threat Hunting Case Study on an AI-Driven Intrusion"
+          author: "Trevor L. Pulliam"
+          date: "September 2026"
+          toc: true
+          toc-depth: 2
+          geometry: margin=0.75in
+          fontsize: 10pt
+          colorlinks: true
+          linkcolor: black
+          urlcolor: black
+          ---
+
+          '''
+          Path('report.md').write_text(front + readme, encoding='utf-8')
+          PY
+
+      - name: Build PDF
+        run: |
+          pandoc report.md \
+            --from=gfm \
+            --pdf-engine=xelatex \
+            --output=Threat-Hunt-JadePuffer.pdf \
+            --resource-path=. \
+            -V mainfont="DejaVu Sans" \
+            -V monofont="DejaVu Sans Mono" \
+            -V colorlinks=true
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: threat-hunt-jadepuffer-pdf
+          path: Threat-Hunt-JadePuffer.pdf
+          retention-days: 7
