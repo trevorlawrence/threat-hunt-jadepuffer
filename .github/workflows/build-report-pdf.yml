@@ -23,8 +23,9 @@ jobs:
           from pathlib import Path
 
           readme = Path('README.md').read_text(encoding='utf-8')
-          # Convert the README's HTML image tags to Markdown images so Pandoc
-          # embeds the repository screenshots in the PDF.
+
+          # Convert repository HTML image tags to Markdown images so Pandoc
+          # embeds the screenshots and hero image in the PDF.
           readme = re.sub(
               r'<img\s+src="([^"]+)"\s+alt="([^"]*)"(?:\s+width="[^"]*")?\s*/?>',
               lambda m: f'![{m.group(2)}]({m.group(1)})',
@@ -32,7 +33,37 @@ jobs:
               flags=re.I,
           )
 
-          front = '''---
+          # Give fenced KQL/code blocks a restrained blue appearance and
+          # light background so queries are visually distinct from narrative text.
+          header = r'''\usepackage{xcolor}
+          \usepackage{fvextra}
+          \usepackage{pdflscape}
+          \definecolor{kqlcolor}{HTML}{24527A}
+          \definecolor{kqlbg}{HTML}{F4F7FA}
+          \DefineVerbatimEnvironment{verbatim}{Verbatim}{formatcom=\color{kqlcolor},fontsize=\small,breaklines=true,breakanywhere=true}
+          \DefineVerbatimEnvironment{Highlighting}{Verbatim}{formatcom=\color{kqlcolor},fontsize=\small,breaklines=true,breakanywhere=true}
+          \usepackage{framed}
+          '''
+
+          # Put the MITRE evidence table on a dedicated landscape page. This
+          # prevents the final rows from being stranded or split across pages.
+          marker = 'The following techniques were identified from the evidence collected during the investigation:'
+          if marker in readme:
+              readme = readme.replace(
+                  marker,
+                  marker + '\n\n\\newpage\n\\begin{landscape}\n\\footnotesize\n',
+                  1,
+              )
+
+          conclusion_marker = '# 10. Conclusion'
+          if conclusion_marker in readme:
+              readme = readme.replace(
+                  conclusion_marker,
+                  '\\normalsize\n\\end{landscape}\n\n' + conclusion_marker,
+                  1,
+              )
+
+          front = f'''---
           title: "Threat Hunt: JadePuffer"
           subtitle: "A Threat Hunting Case Study on an AI-Driven Intrusion"
           author: "Trevor L. Pulliam"
@@ -44,6 +75,9 @@ jobs:
           colorlinks: true
           linkcolor: black
           urlcolor: black
+          header-includes:
+            - |
+              {header}
           ---
 
           '''
@@ -57,6 +91,7 @@ jobs:
             --pdf-engine=xelatex \
             --output=Threat-Hunt-JadePuffer.pdf \
             --resource-path=. \
+            --highlight-style=none \
             -V mainfont="DejaVu Sans" \
             -V monofont="DejaVu Sans Mono" \
             -V colorlinks=true
