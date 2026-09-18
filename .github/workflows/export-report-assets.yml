@@ -1,0 +1,28 @@
+name: Export Report Assets
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package report assets
+        run: |
+          mkdir -p report-assets/query-results
+          cp README.md report-assets/README.md
+          cp -r query-results/* report-assets/query-results/
+          cd report-assets
+          zip -r ../JadePuffer-report-assets.zip .
+
+      - name: Upload report assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: jadepuffer-report-assets
+          path: JadePuffer-report-assets.zip
+          retention-days: 7
