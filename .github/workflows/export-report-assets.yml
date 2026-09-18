@@ -14,11 +14,11 @@ jobs:
 
       - name: Package report assets
         run: |
+          rm -f JadePuffer-report-assets.zip
           mkdir -p report-assets/query-results
           cp README.md report-assets/README.md
           cp -r query-results/* report-assets/query-results/
-          cd report-assets
-          zip -r ../JadePuffer-report-assets.zip .
+          zip -rq JadePuffer-report-assets.zip report-assets
 
       - name: Upload report assets
         uses: actions/upload-artifact@v4
