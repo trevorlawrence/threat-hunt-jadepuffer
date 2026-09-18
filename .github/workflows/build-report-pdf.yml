@@ -37,7 +37,6 @@ jobs:
           # light background so queries are visually distinct from narrative text.
           header = r'''\usepackage{xcolor}
           \usepackage{fvextra}
-          \usepackage{pdflscape}
           \definecolor{kqlcolor}{HTML}{24527A}
           \definecolor{kqlbg}{HTML}{F4F7FA}
           \DefineVerbatimEnvironment{verbatim}{Verbatim}{formatcom=\color{kqlcolor},fontsize=\small,breaklines=true,breakanywhere=true}
@@ -91,7 +90,6 @@ jobs:
             --pdf-engine=xelatex \
             --output=Threat-Hunt-JadePuffer.pdf \
             --resource-path=. \
-            --highlight-style=none \
             -V mainfont="DejaVu Sans" \
             -V monofont="DejaVu Sans Mono" \
             -V colorlinks=true
